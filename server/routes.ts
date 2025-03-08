@@ -57,19 +57,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new deployment
   app.post("/api/deployments", async (req, res) => {
     try {
+      // First, validate the request body
+      console.log("Received deployment request:", req.body);
+
       const parsed = insertDeploymentSchema.parse(req.body);
+      console.log("Parsed deployment data:", parsed);
 
       // Check balance first
       const balance = await sdk.escrow.getUserBalance("CST");
+      console.log("Current balance:", balance);
+
       if (!balance || parseFloat(balance.unlockedBalance) <= 0) {
         throw new Error("Insufficient CST balance in escrow");
       }
 
       // Create deployment using SDK with yamlConfig
+      console.log("Creating deployment with YAML config...");
       const deploymentTxn = await sdk.deployment.createDeployment(
         parsed.yamlConfig,
         PROVIDER_PROXY_URL
       );
+      console.log("Deployment transaction:", deploymentTxn);
 
       // Fetch deployment details
       let deploymentDetails = null;
@@ -123,7 +131,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lease: leaseDetails
       }));
     } catch (error: any) {
-      res.status(400).json({ message: error.message });
+      console.error("Deployment creation error:", error);
+      res.status(400).json({ 
+        message: error.message,
+        details: error.errors || error.stack
+      });
     }
   });
 

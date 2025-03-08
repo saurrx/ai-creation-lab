@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -69,7 +69,6 @@ services:
         # Keep container running
         while true; do
           sleep 60
-          # Print a periodic marker to stdout to keep container active
           echo "Container is running. Stable Diffusion WebUI should be accessible on port 7860."
         done
 
@@ -105,6 +104,7 @@ deployment:
     westcoast:
       profile: sd-webui
       count: 1`;
+
 const WAN_YAML = `version: "1.0"
 
 services:
@@ -156,16 +156,10 @@ services:
           ln -sf /home/jovyan/Wan2.1/Wan2.1-T2V-1.3B/* /home/jovyan/Wan2.1/gradio/Wan2.1-T2V-1.3B/
         fi
 
-        # Modify the gradio script to get the correct model path and port
-        cd /home/jovyan/Wan2.1/gradio
-        sed -i 's/server_port=7860/server_port=7860/g' t2v_1.3B_singleGPU.py
-
         # Launch the Gradio interface with absolute paths to avoid confusion
         echo "Starting Wan2.1 Gradio interface..."
+        cd /home/jovyan/Wan2.1/gradio
         python t2v_1.3B_singleGPU.py --ckpt_dir /home/jovyan/Wan2.1/Wan2.1-T2V-1.3B --prompt_extend_method 'local_qwen' > /tmp/gradio.log 2>&1 &
-
-        # Tail the log file to see any errors
-        tail -f /tmp/gradio.log &
 
         # Keep the container running and show logs
         echo "Services started. Container will remain running."
@@ -175,7 +169,6 @@ services:
         # Keep container running
         while true; do
           sleep 60
-          # Print a periodic marker to stdout to keep container active
           echo "Container is running. Wan2.1 Gradio interface should be accessible on port 7860."
         done
 
@@ -244,8 +237,6 @@ interface DeploymentResponse {
 export default function Home() {
   const { toast } = useToast();
   const [deploymentInfo, setDeploymentInfo] = useState<DeploymentResponse | null>(null);
-  const [isServiceReady, setIsServiceReady] = useState(false);
-  const [pingLogs, setPingLogs] = useState<string[]>([]);
 
   // Forms for both image and video generation
   const imageForm = useForm<InsertDeployment>({
@@ -275,8 +266,6 @@ export default function Home() {
     },
     onSuccess: (data: DeploymentResponse) => {
       setDeploymentInfo(data);
-      setIsServiceReady(false);
-      setPingLogs([]);
       toast({
         title: "🚀 Deployment Started",
         description: "We're firing up your AI service. This might take a few minutes...",
@@ -307,49 +296,6 @@ export default function Home() {
       return null;
     }
   };
-
-  // Check service availability
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-
-    if (deploymentInfo && !isServiceReady) {
-      const checkService = async () => {
-        const url = getWebuiUrl();
-        if (!url) return;
-
-        try {
-          const timestamp = new Date().toLocaleTimeString();
-          setPingLogs(prev => [...prev, `${timestamp} Checking service status...`]);
-
-          const response = await fetch(url);
-          if (response.ok) {
-            setIsServiceReady(true);
-            setPingLogs(prev => [...prev, `${timestamp} Service is ready! 🎉`]);
-            toast({
-              title: "🎨 Ready to Create!",
-              description: "Your AI service is now live. Click 'Open WebUI' to start generating!",
-            });
-            if (intervalId) clearInterval(intervalId);
-          }
-        } catch (error) {
-          const timestamp = new Date().toLocaleTimeString();
-          setPingLogs(prev => [
-            ...prev, 
-            `${timestamp} Service still initializing... (${error instanceof Error ? error.message : 'Network error'})`
-          ]);
-        }
-      };
-
-      // Initial check
-      checkService();
-      // Check every 5 seconds
-      intervalId = setInterval(checkService, 5000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [deploymentInfo, isServiceReady]);
 
   return (
     <div className="container mx-auto py-10 px-4 bg-zinc-100 min-h-screen">
@@ -460,35 +406,18 @@ export default function Home() {
               <p>$ Remaining Time: {deploymentInfo.details.remainingTime}</p>
             </div>
 
-            {getWebuiUrl() ? (
+            {getWebuiUrl() && (
               <div className="space-y-4">
-                <p className="text-green-400">$ WebUI is ready! Access it at:</p>
+                <p className="text-green-400">$ WebUI URL: {getWebuiUrl()}</p>
                 <Button
-                  className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none flex items-center justify-center gap-2"
+                  className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
                   onClick={() => {
                     const url = getWebuiUrl();
                     if (url) window.open(url, '_blank');
                   }}
                 >
-                  {isServiceReady ? "🚀 Open WebUI" : "⏳ Initializing..."}
+                  🚀 Open WebUI
                 </Button>
-              </div>
-            ) : (
-              <div className="animate-pulse">
-                <p>$ Initializing service...</p>
-                <p>$ Please wait while the WebUI is being prepared...</p>
-              </div>
-            )}
-
-            {/* Service Status Checks */}
-            {pingLogs.length > 0 && (
-              <div className="mt-4">
-                <p className="mb-2">$ Service Status Checks:</p>
-                <pre className="bg-zinc-900 p-4 rounded-lg overflow-x-auto text-sm">
-                  {pingLogs.map((log, index) => (
-                    <div key={index}>{log}</div>
-                  ))}
-                </pre>
               </div>
             )}
 
