@@ -292,15 +292,20 @@ export default function Home() {
   });
 
   const getWebuiUrl = () => {
-    if (!deploymentInfo?.details?.forwarded_ports?.['sd-webui'] && 
-        !deploymentInfo?.details?.forwarded_ports?.['wan-gradio']) {
+    try {
+      if (!deploymentInfo?.details?.forwarded_ports) return null;
+
+      const serviceName = deploymentInfo.deployment.name.includes('wan') ? 'wan-gradio' : 'sd-webui';
+      const ports = deploymentInfo.details.forwarded_ports[serviceName];
+
+      if (!ports) return null;
+
+      const webuiPort = ports.find(p => p.port === 7860);
+      return webuiPort ? `http://${webuiPort.host}:${webuiPort.externalPort}` : null;
+    } catch (error) {
+      console.error('Error getting WebUI URL:', error);
       return null;
     }
-    const serviceName = deploymentInfo.deployment.name.includes('wan') ? 'wan-gradio' : 'sd-webui';
-    const webuiPort = deploymentInfo.details.forwarded_ports[serviceName]?.find(
-      p => p.port === 7860
-    );
-    return webuiPort ? `http://${webuiPort.host}:${webuiPort.externalPort}` : null;
   };
 
   // Check service availability
@@ -308,29 +313,37 @@ export default function Home() {
     let intervalId: NodeJS.Timeout;
 
     if (deploymentInfo && !isServiceReady) {
-      const url = getWebuiUrl();
-      if (url) {
-        intervalId = setInterval(async () => {
-          try {
-            const timestamp = new Date().toLocaleTimeString();
-            setPingLogs(prev => [...prev, `${timestamp} Checking service status...`]);
+      const checkService = async () => {
+        const url = getWebuiUrl();
+        if (!url) return;
 
-            const response = await fetch(url);
-            if (response.ok) {
-              setIsServiceReady(true);
-              setPingLogs(prev => [...prev, `${timestamp} Service is ready! 🎉`]);
-              toast({
-                title: "🎨 Ready to Create!",
-                description: "Your AI service is now live. Click 'Open WebUI' to start generating!",
-              });
-              clearInterval(intervalId);
-            }
-          } catch (error) {
-            const timestamp = new Date().toLocaleTimeString();
-            setPingLogs(prev => [...prev, `${timestamp} Service still initializing...`]);
+        try {
+          const timestamp = new Date().toLocaleTimeString();
+          setPingLogs(prev => [...prev, `${timestamp} Checking service status...`]);
+
+          const response = await fetch(url);
+          if (response.ok) {
+            setIsServiceReady(true);
+            setPingLogs(prev => [...prev, `${timestamp} Service is ready! 🎉`]);
+            toast({
+              title: "🎨 Ready to Create!",
+              description: "Your AI service is now live. Click 'Open WebUI' to start generating!",
+            });
+            if (intervalId) clearInterval(intervalId);
           }
-        }, 10000); // Check every 10 seconds
-      }
+        } catch (error) {
+          const timestamp = new Date().toLocaleTimeString();
+          setPingLogs(prev => [
+            ...prev, 
+            `${timestamp} Service still initializing... (${error instanceof Error ? error.message : 'Network error'})`
+          ]);
+        }
+      };
+
+      // Initial check
+      checkService();
+      // Check every 5 seconds
+      intervalId = setInterval(checkService, 5000);
     }
 
     return () => {
