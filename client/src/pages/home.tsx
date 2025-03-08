@@ -263,7 +263,8 @@ export default function Home() {
       setDeploymentInfo(data);
       toast({
         title: "🚀 Deployment Started",
-        description: "We're firing up your AI service. This might take a few minutes...",
+        description: "We're firing up your AI service. Please note: It may take up to 5 minutes for the models to load completely.",
+        duration: 10000, // Show for 10 seconds
       });
     },
     onError: (error: Error) => {
@@ -422,15 +423,23 @@ export default function Home() {
               <div className="space-y-2 animate-typing">
                 <p className="typing-effect">$ Initializing deployment...</p>
                 <p>$ Deployment ID: {deploymentInfo.deployment.id}</p>
+                <p>$ Lease ID: {deploymentInfo.transaction.leaseId}</p>
                 <p>$ Status: {deploymentInfo.details.status}</p>
                 <p>$ Provider: {deploymentInfo.details.provider}</p>
                 <p>$ Started: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
                 <p>$ Remaining Time: {deploymentInfo.details.remainingTime}</p>
+                <p className="text-yellow-400">$ Note: Please wait up to 5 minutes for the AI models to load completely.</p>
               </div>
 
               {getWebuiUrl() && (
                 <div className="space-y-4 animate-fade-in">
                   <p className="text-green-400 typing-effect">$ WebUI URL: {getWebuiUrl()}</p>
+                  <Alert className="bg-yellow-900/20 border-yellow-400/50 mb-4">
+                    <AlertDescription className="text-yellow-400 text-sm">
+                      ⚠️ The WebUI might take a few more minutes to fully initialize even after the URL is available.
+                      If you see a loading screen, please be patient.
+                    </AlertDescription>
+                  </Alert>
                   <Button
                     className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 
                              shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-all duration-300
@@ -456,9 +465,11 @@ export default function Home() {
               {deploymentInfo.details.logs && (
                 <div className="mt-4 animate-fade-in">
                   <p className="mb-2 typing-effect">$ Deployment Logs:</p>
-                  <pre className="bg-zinc-900 p-4 rounded-lg overflow-x-auto text-sm">
-                    {deploymentInfo.details.logs.join('\n')}
-                  </pre>
+                  <div className="bg-zinc-900 p-4 rounded-lg overflow-hidden">
+                    <pre className="overflow-x-auto text-sm max-h-60 overflow-y-auto">
+                      {deploymentInfo.details.logs.join('\n')}
+                    </pre>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -495,7 +506,6 @@ export default function Home() {
         .animate-ping {
           animation: animate-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
-
       `}</style>
     </div>
   );
