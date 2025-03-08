@@ -1,0 +1,106 @@
+version: "1.0"
+
+services:
+  wan-gradio:
+    image: spheronnetwork/jupyter-notebook:pytorch-2.4.1-cuda-enabled
+    pull_policy: IfNotPresent
+    expose:
+      - port: 7860
+        as: 7860
+        to:
+          - global: true
+      - port: 8888
+        as: 8888
+        to:
+          - global: true
+    env:
+      - JUPYTER_TOKEN=test
+      - PYTHONUNBUFFERED=1
+    command:
+      - "bash"
+      - "-c"
+      - |
+        # Start Jupyter in background with a log file
+        jupyter notebook --allow-root --ip=0.0.0.0 --NotebookApp.token=test --no-browser > /tmp/jupyter.log 2>&1 &
+        
+        # Make sure we have necessary dependencies
+        apt-get update && apt-get install -y git wget libgl1 libglib2.0-0 || true
+        pip install --upgrade pip
+        
+        # Clone Wan2.1 repository if it doesn't exist
+        cd /home/jovyan
+        if [ ! -d "Wan2.1" ]; then
+          git clone https://github.com/Wan-Video/Wan2.1.git
+        fi
+        cd Wan2.1
+        
+        # Install dependencies
+        pip install -r requirements.txt
+        
+        # Download the model if it doesn't exist
+        if [ ! -d "Wan2.1-T2V-1.3B" ]; then
+          pip install "huggingface_hub[cli]"
+          huggingface-cli download Wan-AI/Wan2.1-T2V-1.3B --local-dir ./Wan2.1-T2V-1.3B
+          
+          # Make sure the directory structure is correct
+          mkdir -p gradio/Wan2.1-T2V-1.3B
+          
+          # Create symbolic links to the model files to ensure they're accessible from both locations
+          ln -sf /home/jovyan/Wan2.1/Wan2.1-T2V-1.3B/* /home/jovyan/Wan2.1/gradio/Wan2.1-T2V-1.3B/
+        fi
+        
+        # Modify the gradio script to get the correct model path and port
+        cd /home/jovyan/Wan2.1/gradio
+        sed -i 's/server_port=7860/server_port=7860/g' t2v_1.3B_singleGPU.py
+        
+        # Launch the Gradio interface with absolute paths to avoid confusion
+        echo "Starting Wan2.1 Gradio interface..."
+        python t2v_1.3B_singleGPU.py --ckpt_dir /home/jovyan/Wan2.1/Wan2.1-T2V-1.3B --prompt_extend_method 'local_qwen' > /tmp/gradio.log 2>&1 &
+        
+        # Tail the log file to see any errors
+        tail -f /tmp/gradio.log &
+        
+        # Keep the container running and show logs
+        echo "Services started. Container will remain running."
+        echo "Jupyter is accessible on port 8888 with token 'test'"
+        echo "Wan2.1 Gradio interface should be accessible on port 7860"
+        
+        # Keep container running
+        while true; do
+          sleep 60
+          # Print a periodic marker to stdout to keep container active
+          echo "Container is running. Wan2.1 Gradio interface should be accessible on port 7860."
+        done
+
+profiles:
+  name: wan-gradio
+  duration: 1h
+  mode: provider
+  compute:
+    wan-gradio:
+      resources:
+        cpu:
+          units: 16
+        memory:
+          size: 64Gi
+        storage:
+          size: 500Gi
+        gpu:
+          units: 1
+          attributes:
+            vendor:
+              nvidia:
+                - model: rtx6000-ada
+  placement:
+    westcoast:
+      attributes:
+      pricing:
+        wan-gradio:
+          token: CST
+          amount: 15
+
+deployment:
+  wan-gradio:
+    westcoast:
+      profile: wan-gradio
+      count: 1

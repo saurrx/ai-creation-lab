@@ -10,9 +10,9 @@ import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ImageIcon, Server, AlertCircle } from "lucide-react";
+import { ImageIcon, Video, Terminal } from "lucide-react";
 
-// Load the Stable Diffusion WebUI YAML config
+// Load YAML configurations
 const WEBUI_YAML = `version: "1.0"
 
 services:
@@ -106,10 +106,112 @@ deployment:
       profile: sd-webui
       count: 1`;
 
-interface BalanceResponse {
-  lockedBalance: string;
-  unlockedBalance: string;
-}
+const WAN_YAML = `version: "1.0"
+
+services:
+  wan-gradio:
+    image: spheronnetwork/jupyter-notebook:pytorch-2.4.1-cuda-enabled
+    pull_policy: IfNotPresent
+    expose:
+      - port: 7860
+        as: 7860
+        to:
+          - global: true
+      - port: 8888
+        as: 8888
+        to:
+          - global: true
+    env:
+      - JUPYTER_TOKEN=test
+      - PYTHONUNBUFFERED=1
+    command:
+      - "bash"
+      - "-c"
+      - |
+        # Start Jupyter in background with a log file
+        jupyter notebook --allow-root --ip=0.0.0.0 --NotebookApp.token=test --no-browser > /tmp/jupyter.log 2>&1 &
+
+        # Make sure we have necessary dependencies
+        apt-get update && apt-get install -y git wget libgl1 libglib2.0-0 || true
+        pip install --upgrade pip
+
+        # Clone Wan2.1 repository if it doesn't exist
+        cd /home/jovyan
+        if [ ! -d "Wan2.1" ]; then
+          git clone https://github.com/Wan-Video/Wan2.1.git
+        fi
+        cd Wan2.1
+
+        # Install dependencies
+        pip install -r requirements.txt
+
+        # Download the model if it doesn't exist
+        if [ ! -d "Wan2.1-T2V-1.3B" ]; then
+          pip install "huggingface_hub[cli]"
+          huggingface-cli download Wan-AI/Wan2.1-T2V-1.3B --local-dir ./Wan2.1-T2V-1.3B
+
+          # Make sure the directory structure is correct
+          mkdir -p gradio/Wan2.1-T2V-1.3B
+
+          # Create symbolic links to the model files to ensure they're accessible from both locations
+          ln -sf /home/jovyan/Wan2.1/Wan2.1-T2V-1.3B/* /home/jovyan/Wan2.1/gradio/Wan2.1-T2V-1.3B/
+        fi
+
+        # Modify the gradio script to get the correct model path and port
+        cd /home/jovyan/Wan2.1/gradio
+        sed -i 's/server_port=7860/server_port=7860/g' t2v_1.3B_singleGPU.py
+
+        # Launch the Gradio interface with absolute paths to avoid confusion
+        echo "Starting Wan2.1 Gradio interface..."
+        python t2v_1.3B_singleGPU.py --ckpt_dir /home/jovyan/Wan2.1/Wan2.1-T2V-1.3B --prompt_extend_method 'local_qwen' > /tmp/gradio.log 2>&1 &
+
+        # Tail the log file to see any errors
+        tail -f /tmp/gradio.log &
+
+        # Keep the container running and show logs
+        echo "Services started. Container will remain running."
+        echo "Jupyter is accessible on port 8888 with token 'test'"
+        echo "Wan2.1 Gradio interface should be accessible on port 7860"
+
+        # Keep container running
+        while true; do
+          sleep 60
+          # Print a periodic marker to stdout to keep container active
+          echo "Container is running. Wan2.1 Gradio interface should be accessible on port 7860."
+        done
+
+profiles:
+  name: wan-gradio
+  duration: 1h
+  mode: provider
+  compute:
+    wan-gradio:
+      resources:
+        cpu:
+          units: 16
+        memory:
+          size: 64Gi
+        storage:
+          size: 500Gi
+        gpu:
+          units: 1
+          attributes:
+            vendor:
+              nvidia:
+                - model: rtx6000-ada
+  placement:
+    westcoast:
+      attributes:
+      pricing:
+        wan-gradio:
+          token: CST
+          amount: 15
+
+deployment:
+  wan-gradio:
+    westcoast:
+      profile: wan-gradio
+      count: 1`;
 
 interface DeploymentResponse {
   deployment: {
@@ -136,6 +238,7 @@ interface DeploymentResponse {
         host: string;
       }>;
     };
+    logs: string[];
   };
 }
 
@@ -143,7 +246,8 @@ export default function Home() {
   const { toast } = useToast();
   const [deploymentInfo, setDeploymentInfo] = useState<DeploymentResponse | null>(null);
 
-  const form = useForm<InsertDeployment>({
+  // Forms for both image and video generation
+  const imageForm = useForm<InsertDeployment>({
     resolver: zodResolver(insertDeploymentSchema),
     defaultValues: {
       name: "stable-diffusion-webui",
@@ -151,8 +255,12 @@ export default function Home() {
     },
   });
 
-  const { data: escrowBalance } = useQuery<BalanceResponse>({
-    queryKey: ["/api/balance"],
+  const videoForm = useForm<InsertDeployment>({
+    resolver: zodResolver(insertDeploymentSchema),
+    defaultValues: {
+      name: "wan-gradio",
+      yamlConfig: WAN_YAML,
+    },
   });
 
   const deployMutation = useMutation({
@@ -168,9 +276,8 @@ export default function Home() {
       setDeploymentInfo(data);
       toast({
         title: "Deployment Created",
-        description: "Stable Diffusion WebUI is being deployed. Please wait for the WebUI URL.",
+        description: "Service is being deployed. Please wait for the WebUI URL.",
       });
-      form.reset();
     },
     onError: (error: Error) => {
       toast({
@@ -181,129 +288,141 @@ export default function Home() {
     },
   });
 
-  const onSubmit = (data: InsertDeployment) => {
-    deployMutation.mutate(data);
-  };
-
   const getWebuiUrl = () => {
-    if (!deploymentInfo?.details?.forwarded_ports?.['sd-webui']) {
+    if (!deploymentInfo?.details?.forwarded_ports?.['sd-webui'] && 
+        !deploymentInfo?.details?.forwarded_ports?.['wan-gradio']) {
       return null;
     }
-    const webuiPort = deploymentInfo.details.forwarded_ports['sd-webui'].find(
+    const serviceName = deploymentInfo.deployment.name.includes('wan') ? 'wan-gradio' : 'sd-webui';
+    const webuiPort = deploymentInfo.details.forwarded_ports[serviceName]?.find(
       p => p.port === 7860
     );
     return webuiPort ? `http://${webuiPort.host}:${webuiPort.externalPort}` : null;
   };
 
   return (
-    <div className="container mx-auto py-10 px-4">
-      <h1 className="text-4xl font-bold mb-8">Stable Diffusion Image Generator</h1>
+    <div className="container mx-auto py-10 px-4 bg-zinc-100 min-h-screen">
+      <h1 className="text-6xl font-black mb-8 text-zinc-900 tracking-tight">AI Creation Lab</h1>
 
-      <div className="grid gap-6">
-        <Card>
+      <div className="grid md:grid-cols-2 gap-8">
+        {/* Image Generation Section */}
+        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Server className="h-5 w-5" />
-              Balance Status
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <ImageIcon className="h-6 w-6" />
+              Generate Images
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {escrowBalance ? (
-              <div className="space-y-2">
-                <p className="text-lg">
-                  Available Balance: {escrowBalance.unlockedBalance} CST
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Locked in deployments: {escrowBalance.lockedBalance} CST
-                </p>
-              </div>
-            ) : (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Unable to fetch balance. Please ensure you have sufficient CST funds.
-                </AlertDescription>
-              </Alert>
-            )}
+            <Form {...imageForm}>
+              <form onSubmit={imageForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
+                <FormField
+                  control={imageForm.control}
+                  name="yamlConfig"
+                  render={({ field }) => (
+                    <FormItem className="hidden">
+                      <FormControl>
+                        <Input type="hidden" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="submit"
+                  disabled={deployMutation.isPending}
+                  className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
+                >
+                  {deployMutation.isPending ? "Deploying Stable Diffusion..." : "Generate Images with Stable Diffusion"}
+                </Button>
+              </form>
+            </Form>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Video Generation Section */}
+        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ImageIcon className="h-5 w-5" />
-              Generate Images with Stable Diffusion
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <Video className="h-6 w-6" />
+              Generate Videos
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {deploymentInfo && getWebuiUrl() ? (
-              <div className="space-y-4">
-                <Alert>
-                  <AlertDescription>
-                    Stable Diffusion WebUI is ready! Click the button below to start generating images.
-                  </AlertDescription>
-                </Alert>
+            <Form {...videoForm}>
+              <form onSubmit={videoForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
+                <FormField
+                  control={videoForm.control}
+                  name="yamlConfig"
+                  render={({ field }) => (
+                    <FormItem className="hidden">
+                      <FormControl>
+                        <Input type="hidden" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
                 <Button
-                  className="w-full mt-4"
+                  type="submit"
+                  disabled={deployMutation.isPending}
+                  className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
+                >
+                  {deployMutation.isPending ? "Deploying Wan..." : "Generate Videos with Wan"}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Terminal-style Deployment Info */}
+      {deploymentInfo && (
+        <Card className="mt-8 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-black text-green-400 font-mono">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl text-green-400">
+              <Terminal className="h-5 w-5" />
+              Deployment Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <p>$ Deployment ID: {deploymentInfo.deployment.id}</p>
+              <p>$ Status: {deploymentInfo.details.status}</p>
+              <p>$ Provider: {deploymentInfo.details.provider}</p>
+              <p>$ Started: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
+              <p>$ Remaining Time: {deploymentInfo.details.remainingTime}</p>
+            </div>
+
+            {getWebuiUrl() ? (
+              <div className="space-y-4">
+                <p className="text-green-400">$ WebUI is ready! Access it at:</p>
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
                   onClick={() => {
                     const url = getWebuiUrl();
                     if (url) window.open(url, '_blank');
                   }}
                 >
-                  Open Stable Diffusion WebUI
+                  Open WebUI
                 </Button>
               </div>
             ) : (
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Deployment Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="stable-diffusion-webui" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="yamlConfig"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input type="hidden" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  <Button
-                    type="submit"
-                    disabled={deployMutation.isPending}
-                    className="w-full"
-                  >
-                    {deployMutation.isPending ? "Deploying Stable Diffusion..." : "Generate Images with Stable Diffusion"}
-                  </Button>
-                </form>
-              </Form>
+              <div className="animate-pulse">
+                <p>$ Initializing service...</p>
+                <p>$ Please wait while the WebUI is being prepared...</p>
+              </div>
             )}
 
-            {deploymentInfo && !getWebuiUrl() && (
+            {deploymentInfo.details.logs && (
               <div className="mt-4">
-                <Alert>
-                  <AlertDescription>
-                    Deployment is in progress. The WebUI will be available shortly...
-                  </AlertDescription>
-                </Alert>
+                <p className="mb-2">$ Recent Logs:</p>
+                <pre className="bg-zinc-900 p-4 rounded-lg overflow-x-auto text-sm">
+                  {deploymentInfo.details.logs.join('\n')}
+                </pre>
               </div>
             )}
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 }
