@@ -8,13 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageIcon, Server, AlertCircle } from "lucide-react";
 
-// Load the Stable Diffusion WebUI YAML config from the attached file
-const WEBUI_CONFIG = `version: "1.0"
+// Load the Stable Diffusion WebUI YAML config
+const WEBUI_YAML = `version: "1.0"
 
 services:
   sd-webui:
@@ -70,8 +69,42 @@ services:
         # Keep container running
         while true; do
           sleep 60
+          # Print a periodic marker to stdout to keep container active
           echo "Container is running. Stable Diffusion WebUI should be accessible on port 7860."
-        done`;
+        done
+
+profiles:
+  name: stable-diffusion-webui
+  duration: 1h
+  mode: provider
+  compute:
+    sd-webui:
+      resources:
+        cpu:
+          units: 16
+        memory:
+          size: 64Gi
+        storage:
+          size: 500Gi
+        gpu:
+          units: 1
+          attributes:
+            vendor:
+              nvidia:
+                - model: rtx6000-ada
+  placement:
+    westcoast:
+      attributes:
+      pricing:
+        sd-webui:
+          token: CST
+          amount: 15
+
+deployment:
+  sd-webui:
+    westcoast:
+      profile: sd-webui
+      count: 1`;
 
 interface BalanceResponse {
   lockedBalance: string;
@@ -114,7 +147,7 @@ export default function Home() {
     resolver: zodResolver(insertDeploymentSchema),
     defaultValues: {
       name: "stable-diffusion-webui",
-      yamlConfig: WEBUI_CONFIG,
+      yamlConfig: WEBUI_YAML,
     },
   });
 
@@ -149,10 +182,6 @@ export default function Home() {
   });
 
   const onSubmit = (data: InsertDeployment) => {
-    // Ensure yamlConfig is included
-    if (!data.yamlConfig) {
-      data.yamlConfig = WEBUI_CONFIG;
-    }
     deployMutation.mutate(data);
   };
 
