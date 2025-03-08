@@ -6,14 +6,14 @@ import { insertDeploymentSchema, type InsertDeployment } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageIcon, Server, AlertCircle } from "lucide-react";
 
-// Load the Stable Diffusion WebUI YAML config
+// Load the Stable Diffusion WebUI YAML config from the attached file
 const WEBUI_CONFIG = `version: "1.0"
 
 services:
@@ -125,6 +125,10 @@ export default function Home() {
   const deployMutation = useMutation({
     mutationFn: async (data: InsertDeployment) => {
       const res = await apiRequest("POST", "/api/deployments", data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to create deployment");
+      }
       return res.json();
     },
     onSuccess: (data: DeploymentResponse) => {
@@ -135,7 +139,7 @@ export default function Home() {
       });
       form.reset();
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
         description: error.message,
@@ -145,6 +149,10 @@ export default function Home() {
   });
 
   const onSubmit = (data: InsertDeployment) => {
+    // Ensure yamlConfig is included
+    if (!data.yamlConfig) {
+      data.yamlConfig = WEBUI_CONFIG;
+    }
     deployMutation.mutate(data);
   };
 
@@ -236,9 +244,9 @@ export default function Home() {
                     control={form.control}
                     name="yamlConfig"
                     render={({ field }) => (
-                      <FormItem className="hidden">
+                      <FormItem>
                         <FormControl>
-                          <Textarea {...field} />
+                          <Input type="hidden" {...field} />
                         </FormControl>
                       </FormItem>
                     )}
