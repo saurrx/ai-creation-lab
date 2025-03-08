@@ -5,17 +5,19 @@ import { z } from "zod";
 export const deployments = pgTable("deployments", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  iclConfig: text("icl_config").notNull(),
+  yamlConfig: text("yaml_config").notNull(),
   status: text("status").notNull().default("pending"),
-  providerUrl: text("provider_url").notNull(),
+  webuiUrl: text("webui_url"),
+  error: text("error"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Schema for creating new deployments
 export const insertDeploymentSchema = createInsertSchema(deployments).pick({
   name: true,
-  iclConfig: true,
-  providerUrl: true,
+  yamlConfig: true,
 });
 
+// Define TypeScript types
 export type InsertDeployment = z.infer<typeof insertDeploymentSchema>;
 export type Deployment = typeof deployments.$inferSelect;

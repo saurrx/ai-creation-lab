@@ -21,6 +21,8 @@ export class MemStorage implements IStorage {
       ...insertDeployment,
       id,
       status: "pending",
+      webuiUrl: null,
+      error: null,
       createdAt: new Date()
     };
     this.deployments.set(id, deployment);

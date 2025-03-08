@@ -11,59 +11,67 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Upload, Server, AlertCircle } from "lucide-react";
+import { ImageIcon, Server, AlertCircle } from "lucide-react";
 
-// Keep the DEFAULT_ICL_CONFIG as is...
-const DEFAULT_ICL_CONFIG = `version: "1.0"
+// Load the Stable Diffusion WebUI YAML config
+const WEBUI_CONFIG = `version: "1.0"
 
 services:
-  ollama-test:
-    image: ollama/ollama:0.3.12
+  sd-webui:
+    image: spheronnetwork/jupyter-notebook:pytorch-2.4.1-cuda-enabled
     pull_policy: IfNotPresent
     expose:
-      - port: 11434
-        as: 11434
+      - port: 7860
+        as: 7860
+        to:
+          - global: true
+      - port: 8888
+        as: 8888
         to:
           - global: true
     env:
-      - OLLAMA_MODEL=llama3.2
+      - JUPYTER_TOKEN=test
+      - PYTHONUNBUFFERED=1
     command:
-      - "sh"
+      - "bash"
       - "-c"
-      - "apt update && apt install -y curl && /bin/ollama serve & while ! curl -s http://localhost:11434/api/tags > /dev/null; do sleep 1; done && /bin/ollama pull $OLLAMA_MODEL && /bin/ollama run $OLLAMA_MODEL 'Hello' && tail -f /dev/null"
-profiles:
-  name: ollama-testing
-  duration: 1h
-  mode: provider
-  tier:
-    - community
-  compute:
-    ollama-test:
-      resources:
-        cpu:
-          units: 1
-        memory:
-          size: 2Gi
-        storage:
-          - size: 50Gi
-        gpu:
-          units: 1
-          attributes:
-            vendor:
-              nvidia:
-                - model: rtx4090
-  placement:
-    westcoast:
-      pricing:
-        ollama-test:
-          token: CST
-          amount: 5
+      - |
+        # Start Jupyter in background with a log file
+        jupyter notebook --allow-root --ip=0.0.0.0 --NotebookApp.token=test --no-browser > /tmp/jupyter.log 2>&1 &
 
-deployment:
-  ollama-test:
-    westcoast:
-      profile: ollama-test
-      count: 1`;
+        # Make sure we have necessary dependencies
+        apt-get update && apt-get install -y git wget libgl1 libglib2.0-0 || true
+
+        # Clone Stable Diffusion WebUI
+        cd /home/jovyan
+        if [ ! -d "stable-diffusion-webui" ]; then
+          git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git
+        fi
+        cd stable-diffusion-webui
+
+        # Create a webui-user.sh file with appropriate settings
+        cat > webui-user.sh << 'EOF'
+        #!/bin/bash
+        export COMMANDLINE_ARGS="--listen --port 7860 --enable-insecure-extension-access"
+        export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+        EOF
+        chmod +x webui-user.sh
+
+        # Launch Stable Diffusion WebUI with logs
+        echo "Starting Stable Diffusion WebUI..."
+        ./webui.sh > /tmp/webui.log 2>&1 &
+
+        # Give WebUI some time to start
+        sleep 10
+
+        # Keep the container running and show logs
+        echo "Services started. Container will remain running. View logs with 'tail -f /tmp/webui.log' command."
+
+        # Keep container running
+        while true; do
+          sleep 60
+          echo "Container is running. Stable Diffusion WebUI should be accessible on port 7860."
+        done`;
 
 interface BalanceResponse {
   lockedBalance: string;
@@ -75,6 +83,7 @@ interface DeploymentResponse {
     id: number;
     name: string;
     status: string;
+    webuiUrl?: string;
   };
   transaction: {
     leaseId: string;
@@ -94,35 +103,6 @@ interface DeploymentResponse {
         host: string;
       }>;
     };
-    services: {
-      [key: string]: {
-        available: string;
-        total: string;
-        ready_replicas: number;
-        replicas: number;
-        uris?: string[];
-        container_statuses?: Array<{
-          name: string;
-          ready: boolean;
-          state: {
-            running?: { startedAt: string };
-            terminated?: { reason: string; exitCode: number };
-            waiting?: { reason: string };
-          };
-        }>;
-      };
-    };
-    providerDetails: {
-      hostUri: string;
-      spec: any;
-      status: string;
-      trust: number;
-    };
-    logs: string[];
-  };
-  lease: {
-    status: string;
-    duration: string;
   };
 }
 
@@ -133,9 +113,8 @@ export default function Home() {
   const form = useForm<InsertDeployment>({
     resolver: zodResolver(insertDeploymentSchema),
     defaultValues: {
-      name: "ollama-deployment",
-      iclConfig: DEFAULT_ICL_CONFIG,
-      providerUrl: "https://provider-proxy.spheron.network",
+      name: "stable-diffusion-webui",
+      yamlConfig: WEBUI_CONFIG,
     },
   });
 
@@ -152,13 +131,9 @@ export default function Home() {
       setDeploymentInfo(data);
       toast({
         title: "Deployment Created",
-        description: "Your deployment has been created successfully. Fetching deployment details...",
+        description: "Stable Diffusion WebUI is being deployed. Please wait for the WebUI URL.",
       });
-      form.reset({
-        name: "ollama-deployment",
-        iclConfig: DEFAULT_ICL_CONFIG,
-        providerUrl: "https://provider-proxy.spheron.network",
-      });
+      form.reset();
     },
     onError: (error) => {
       toast({
@@ -173,9 +148,19 @@ export default function Home() {
     deployMutation.mutate(data);
   };
 
+  const getWebuiUrl = () => {
+    if (!deploymentInfo?.details?.forwarded_ports?.['sd-webui']) {
+      return null;
+    }
+    const webuiPort = deploymentInfo.details.forwarded_ports['sd-webui'].find(
+      p => p.port === 7860
+    );
+    return webuiPort ? `http://${webuiPort.host}:${webuiPort.externalPort}` : null;
+  };
+
   return (
     <div className="container mx-auto py-10 px-4">
-      <h1 className="text-4xl font-bold mb-8">Spheron Deployment Creator</h1>
+      <h1 className="text-4xl font-bold mb-8">Stable Diffusion Image Generator</h1>
 
       <div className="grid gap-6">
         <Card>
@@ -206,169 +191,79 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {deploymentInfo && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Deployment Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium">Basic Information</h3>
-                  <p>Name: {deploymentInfo.deployment.name}</p>
-                  <p>Status: {deploymentInfo.deployment.status}</p>
-                  <p>Lease ID: {deploymentInfo.transaction.leaseId}</p>
-                </div>
-
-                {deploymentInfo.details && (
-                  <>
-                    <div>
-                      <h3 className="font-medium">Deployment Status</h3>
-                      <p>Status: {deploymentInfo.details.status}</p>
-                      <p>Provider: {deploymentInfo.details.provider}</p>
-                      <p>Price per hour: {deploymentInfo.details.pricePerHour} CST</p>
-                      <p>Start time: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
-                      <p>Remaining time: {deploymentInfo.details.remainingTime}</p>
-                    </div>
-
-                    {deploymentInfo.details.providerDetails && (
-                      <div>
-                        <h3 className="font-medium">Provider Details</h3>
-                        <p>Host URI: {deploymentInfo.details.providerDetails.hostUri || 'Not available'}</p>
-                        <p>Status: {deploymentInfo.details.providerDetails.status || 'Unknown'}</p>
-                        <p>Trust Score: {deploymentInfo.details.providerDetails.trust || 'N/A'}</p>
-                      </div>
-                    )}
-
-                    {deploymentInfo.details.services && Object.keys(deploymentInfo.details.services).length > 0 && (
-                      <div>
-                        <h3 className="font-medium">Services</h3>
-                        {Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
-                          <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
-                            <h4 className="font-medium">{serviceName}</h4>
-                            <p>Available: {service.available}/{service.total}</p>
-                            <p>Ready replicas: {service.ready_replicas}/{service.replicas}</p>
-
-                            {service.uris && service.uris.length > 0 && (
-                              <p>URIs: {service.uris.join(', ')}</p>
-                            )}
-
-                            {service.container_statuses && service.container_statuses.length > 0 && (
-                              <div className="mt-2">
-                                <h5 className="font-medium">Container Statuses:</h5>
-                                {service.container_statuses.map((status, idx) => (
-                                  <div key={idx} className="ml-4">
-                                    <p>{status.name}: {status.ready ? 'Ready' : 'Not ready'}</p>
-                                    {status.state.running && (
-                                      <p className="text-sm">Running since: {status.state.running.startedAt}</p>
-                                    )}
-                                    {status.state.terminated && (
-                                      <p className="text-sm">Terminated: {status.state.terminated.reason} (exit code {status.state.terminated.exitCode})</p>
-                                    )}
-                                    {status.state.waiting && (
-                                      <p className="text-sm">Waiting: {status.state.waiting.reason}</p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {deploymentInfo.details.forwarded_ports && 
-                     Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
-                      <div>
-                        <h3 className="font-medium">Forwarded Ports</h3>
-                        {Object.entries(deploymentInfo.details.forwarded_ports).map(([service, ports]) => (
-                          <div key={service} className="mt-2">
-                            <h4 className="font-medium">{service}:</h4>
-                            <ul className="list-disc list-inside">
-                              {ports.map((port, idx) => (
-                                <li key={idx}>
-                                  {port.proto.toUpperCase()} {port.host}:{port.externalPort} &rarr; {port.port} ({port.name})
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {deploymentInfo.details.logs && deploymentInfo.details.logs.length > 0 && (
-                      <div>
-                        <h3 className="font-medium">Deployment Logs</h3>
-                        <pre className="mt-2 p-4 bg-muted rounded-lg overflow-x-auto">
-                          {deploymentInfo.details.logs.join('\n')}
-                        </pre>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {deploymentInfo.lease && (
-                  <div>
-                    <h3 className="font-medium">Lease Information</h3>
-                    <p>Status: {deploymentInfo.lease.status}</p>
-                    <p>Duration: {deploymentInfo.lease.duration}</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Create Deployment
+              <ImageIcon className="h-5 w-5" />
+              Generate Images with Stable Diffusion
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Deployment Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="my-deployment" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="iclConfig"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ICL Configuration (YAML)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="version: '1.0'..."
-                          className="font-mono"
-                          rows={10}
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
+            {deploymentInfo && getWebuiUrl() ? (
+              <div className="space-y-4">
+                <Alert>
+                  <AlertDescription>
+                    Stable Diffusion WebUI is ready! Click the button below to start generating images.
+                  </AlertDescription>
+                </Alert>
                 <Button
-                  type="submit"
-                  disabled={deployMutation.isPending}
-                  className="w-full"
+                  className="w-full mt-4"
+                  onClick={() => {
+                    const url = getWebuiUrl();
+                    if (url) window.open(url, '_blank');
+                  }}
                 >
-                  {deployMutation.isPending ? "Creating Deployment..." : "Create Deployment"}
+                  Open Stable Diffusion WebUI
                 </Button>
-              </form>
-            </Form>
+              </div>
+            ) : (
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Deployment Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="stable-diffusion-webui" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="yamlConfig"
+                    render={({ field }) => (
+                      <FormItem className="hidden">
+                        <FormControl>
+                          <Textarea {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="submit"
+                    disabled={deployMutation.isPending}
+                    className="w-full"
+                  >
+                    {deployMutation.isPending ? "Deploying Stable Diffusion..." : "Generate Images with Stable Diffusion"}
+                  </Button>
+                </form>
+              </Form>
+            )}
+
+            {deploymentInfo && !getWebuiUrl() && (
+              <div className="mt-4">
+                <Alert>
+                  <AlertDescription>
+                    Deployment is in progress. The WebUI will be available shortly...
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

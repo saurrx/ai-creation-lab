@@ -65,9 +65,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Insufficient CST balance in escrow");
       }
 
-      // Create deployment using SDK
+      // Create deployment using SDK with yamlConfig
       const deploymentTxn = await sdk.deployment.createDeployment(
-        parsed.iclConfig,
+        parsed.yamlConfig,
         PROVIDER_PROXY_URL
       );
 
@@ -83,17 +83,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             PROVIDER_PROXY_URL
           );
 
-          // Get order details
-          const orderDetails = await sdk.orders.getOrderDetails(deploymentTxn.leaseId);
-
           // Get lease details
           leaseDetails = await sdk.leases.getLeaseDetails(deploymentTxn.leaseId);
 
           // Get lease status
           const leaseStatus = await sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId);
-
-          // Get provider details
-          const providerDetails = await sdk.provider.getProviderDetails(leaseDetails.providerAddress);
 
           // Get deployment logs
           const deploymentLogs = await sdk.deployment.getDeploymentLogs(
@@ -110,13 +104,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             startTime: leaseStatus?.startTime || new Date().toISOString(),
             remainingTime: leaseStatus?.remainingTime || "",
             services: deploymentDetails?.services || {},
-            orderDetails: orderDetails, // Added order details
-            providerDetails: {
-              hostUri: providerDetails.hostUri,
-              spec: providerDetails.spec,
-              status: providerDetails.status,
-              trust: providerDetails.trust
-            },
             logs: deploymentLogs
           };
         } catch (error) {
