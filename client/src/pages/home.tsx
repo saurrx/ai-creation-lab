@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -10,9 +10,9 @@ import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ImageIcon, Video, Terminal } from "lucide-react";
+import { ImageIcon, Video, Terminal, Loader2 } from "lucide-react";
 
-// Load YAML configurations
+// Load YAML configurations from uploaded files
 const WEBUI_YAML = `version: "1.0"
 
 services:
@@ -105,7 +105,6 @@ deployment:
     westcoast:
       profile: sd-webui
       count: 1`;
-
 const WAN_YAML = `version: "1.0"
 
 services:
@@ -245,6 +244,8 @@ interface DeploymentResponse {
 export default function Home() {
   const { toast } = useToast();
   const [deploymentInfo, setDeploymentInfo] = useState<DeploymentResponse | null>(null);
+  const [isServiceReady, setIsServiceReady] = useState(false);
+  const [pingLogs, setPingLogs] = useState<string[]>([]);
 
   // Forms for both image and video generation
   const imageForm = useForm<InsertDeployment>({
@@ -274,14 +275,16 @@ export default function Home() {
     },
     onSuccess: (data: DeploymentResponse) => {
       setDeploymentInfo(data);
+      setIsServiceReady(false);
+      setPingLogs([]);
       toast({
-        title: "Deployment Created",
-        description: "Service is being deployed. Please wait for the WebUI URL.",
+        title: "🚀 Deployment Started",
+        description: "We're firing up your AI service. This might take a few minutes...",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "❌ Error",
         description: error.message,
         variant: "destructive",
       });
@@ -300,13 +303,49 @@ export default function Home() {
     return webuiPort ? `http://${webuiPort.host}:${webuiPort.externalPort}` : null;
   };
 
+  // Check service availability
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (deploymentInfo && !isServiceReady) {
+      const url = getWebuiUrl();
+      if (url) {
+        intervalId = setInterval(async () => {
+          try {
+            const timestamp = new Date().toLocaleTimeString();
+            setPingLogs(prev => [...prev, `${timestamp} Checking service status...`]);
+
+            const response = await fetch(url);
+            if (response.ok) {
+              setIsServiceReady(true);
+              setPingLogs(prev => [...prev, `${timestamp} Service is ready! 🎉`]);
+              toast({
+                title: "🎨 Ready to Create!",
+                description: "Your AI service is now live. Click 'Open WebUI' to start generating!",
+              });
+              clearInterval(intervalId);
+            }
+          } catch (error) {
+            const timestamp = new Date().toLocaleTimeString();
+            setPingLogs(prev => [...prev, `${timestamp} Service still initializing...`]);
+          }
+        }, 10000); // Check every 10 seconds
+      }
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [deploymentInfo, isServiceReady]);
+
   return (
     <div className="container mx-auto py-10 px-4 bg-zinc-100 min-h-screen">
-      <h1 className="text-6xl font-black mb-8 text-zinc-900 tracking-tight">AI Creation Lab</h1>
+      <h1 className="text-6xl font-black mb-4 text-zinc-900 tracking-tight">AI Creation Lab</h1>
+      <p className="text-xl mb-8 text-zinc-600">Transform your ideas into stunning visuals with the power of AI</p>
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* Image Generation Section */}
-        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl">
               <ImageIcon className="h-6 w-6" />
@@ -314,6 +353,7 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <p className="mb-4 text-zinc-600">Create stunning images from text descriptions using Stable Diffusion</p>
             <Form {...imageForm}>
               <form onSubmit={imageForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
                 <FormField
@@ -332,7 +372,14 @@ export default function Home() {
                   disabled={deployMutation.isPending}
                   className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
                 >
-                  {deployMutation.isPending ? "Deploying Stable Diffusion..." : "Generate Images with Stable Diffusion"}
+                  {deployMutation.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deploying Stable Diffusion...
+                    </span>
+                  ) : (
+                    "🎨 Generate Images with Stable Diffusion"
+                  )}
                 </Button>
               </form>
             </Form>
@@ -340,7 +387,7 @@ export default function Home() {
         </Card>
 
         {/* Video Generation Section */}
-        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl">
               <Video className="h-6 w-6" />
@@ -348,6 +395,7 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <p className="mb-4 text-zinc-600">Transform your text into amazing videos with Wan AI</p>
             <Form {...videoForm}>
               <form onSubmit={videoForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
                 <FormField
@@ -366,7 +414,14 @@ export default function Home() {
                   disabled={deployMutation.isPending}
                   className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
                 >
-                  {deployMutation.isPending ? "Deploying Wan..." : "Generate Videos with Wan"}
+                  {deployMutation.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deploying Wan...
+                    </span>
+                  ) : (
+                    "🎬 Generate Videos with Wan"
+                  )}
                 </Button>
               </form>
             </Form>
@@ -396,13 +451,13 @@ export default function Home() {
               <div className="space-y-4">
                 <p className="text-green-400">$ WebUI is ready! Access it at:</p>
                 <Button
-                  className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
+                  className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none flex items-center justify-center gap-2"
                   onClick={() => {
                     const url = getWebuiUrl();
                     if (url) window.open(url, '_blank');
                   }}
                 >
-                  Open WebUI
+                  {isServiceReady ? "🚀 Open WebUI" : "⏳ Initializing..."}
                 </Button>
               </div>
             ) : (
@@ -412,9 +467,22 @@ export default function Home() {
               </div>
             )}
 
+            {/* Service Status Checks */}
+            {pingLogs.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-2">$ Service Status Checks:</p>
+                <pre className="bg-zinc-900 p-4 rounded-lg overflow-x-auto text-sm">
+                  {pingLogs.map((log, index) => (
+                    <div key={index}>{log}</div>
+                  ))}
+                </pre>
+              </div>
+            )}
+
+            {/* Deployment Logs */}
             {deploymentInfo.details.logs && (
               <div className="mt-4">
-                <p className="mb-2">$ Recent Logs:</p>
+                <p className="mb-2">$ Deployment Logs:</p>
                 <pre className="bg-zinc-900 p-4 rounded-lg overflow-x-auto text-sm">
                   {deploymentInfo.details.logs.join('\n')}
                 </pre>
