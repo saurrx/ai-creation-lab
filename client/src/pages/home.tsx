@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ImageIcon, Video, Terminal, Loader2, Sparkles } from "lucide-react";
+import { ParticleBackground } from "@/components/ui/particles";
 
 // Load the Punk Model YAML config
 const PUNK_YAML = `version: "1.0"
@@ -294,235 +295,238 @@ export default function Home() {
   };
 
   return (
-    <div className="container mx-auto py-10 px-4 bg-zinc-100 min-h-screen">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-6xl font-black mb-4 text-zinc-900 tracking-tight relative group">
-          <span className="inline-block transform transition-transform group-hover:scale-105">AI Creation Lab</span>
-          <Sparkles className="h-8 w-8 text-yellow-400 absolute -right-12 top-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-        </h1>
-        <p className="text-xl mb-12 text-zinc-600 animate-fade-in">
-          Transform your ideas into stunning visuals with the power of AI
-        </p>
+    <div className="relative min-h-screen bg-zinc-100">
+      <ParticleBackground />
+      <div className="container mx-auto py-10 px-4 relative">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-6xl font-black mb-4 text-zinc-900 tracking-tight relative group">
+            <span className="inline-block transform transition-transform group-hover:scale-105">AI Creation Lab</span>
+            <Sparkles className="h-8 w-8 text-yellow-400 absolute -right-12 top-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </h1>
+          <p className="text-xl mb-12 text-zinc-600 animate-fade-in">
+            Transform your ideas into stunning visuals with the power of AI
+          </p>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Image Generation Section */}
-          <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl">
-                <ImageIcon className="h-6 w-6" />
-                Generate Images
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4 text-zinc-600">Create ultra-realistic portraits using our fine-tuned Stable Diffusion model</p>
-              <Form {...imageForm}>
-                <form onSubmit={imageForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
-                  <FormField
-                    control={imageForm.control}
-                    name="yamlConfig"
-                    render={({ field }) => (
-                      <FormItem className="hidden">
-                        <FormControl>
-                          <Input type="hidden" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <Button
-                    type="submit"
-                    disabled={deployMutation.isPending}
-                    className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black 
-                             shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 
-                             hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]
-                             active:translate-x-1 active:translate-y-1 active:shadow-none
-                             disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {deployMutation.isPending ? (
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Image Generation Section */}
+            <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-2xl">
+                  <ImageIcon className="h-6 w-6" />
+                  Generate Images
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4 text-zinc-600">Create ultra-realistic portraits using our fine-tuned Stable Diffusion model</p>
+                <Form {...imageForm}>
+                  <form onSubmit={imageForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
+                    <FormField
+                      control={imageForm.control}
+                      name="yamlConfig"
+                      render={({ field }) => (
+                        <FormItem className="hidden">
+                          <FormControl>
+                            <Input type="hidden" {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <Button
+                      type="submit"
+                      disabled={deployMutation.isPending}
+                      className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black 
+                               shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 
+                               hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]
+                               active:translate-x-1 active:translate-y-1 active:shadow-none
+                               disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deployMutation.isPending ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Deploying Punk Model...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <span className="relative">
+                            🎨
+                            <span className="absolute -top-1 -right-1 animate-ping">✨</span>
+                          </span>
+                          Generate Ultra-Realistic Portraits
+                        </span>
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+
+            {/* Video Generation Section */}
+            <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-2xl">
+                  <Video className="h-6 w-6" />
+                  Generate Videos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4 text-zinc-600">Transform your text into amazing videos with Wan AI</p>
+                <Form {...videoForm}>
+                  <form onSubmit={videoForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
+                    <FormField
+                      control={videoForm.control}
+                      name="yamlConfig"
+                      render={({ field }) => (
+                        <FormItem className="hidden">
+                          <FormControl>
+                            <Input type="hidden" {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <Button
+                      type="submit"
+                      disabled={deployMutation.isPending}
+                      className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black 
+                               shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-300
+                               hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]
+                               active:translate-x-1 active:translate-y-1 active:shadow-none
+                               disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deployMutation.isPending ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Deploying Wan...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <span className="relative">
+                            🎬
+                            <span className="absolute -top-1 -right-1 animate-ping">✨</span>
+                          </span>
+                          Generate Amazing Videos
+                        </span>
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Terminal-style Deployment Info */}
+          {deploymentInfo && (
+            <Card className="mt-8 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-black text-green-400 font-mono animate-fade-in">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl text-green-400">
+                  <Terminal className="h-5 w-5" />
+                  Deployment Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 animate-typing">
+                  <p className="typing-effect">$ Initializing deployment...</p>
+                  <p>$ Deployment ID: {deploymentInfo.deployment.id}</p>
+                  <p>$ Lease ID: {deploymentInfo.transaction.leaseId}</p>
+                  <p>$ Status: {deploymentInfo.details.status}</p>
+                  <p>$ Provider: {deploymentInfo.details.provider}</p>
+                  <p>$ Started: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
+                  <p>$ Remaining Time: {deploymentInfo.details.remainingTime}</p>
+                  <p className="text-yellow-400">$ Note: Please wait up to 5 minutes for the AI models to load completely.</p>
+                </div>
+
+                {getWebuiUrl() && (
+                  <div className="space-y-4 animate-fade-in">
+                    <p className="text-green-400 typing-effect">$ WebUI URL: {getWebuiUrl()}</p>
+                    <Alert className="bg-yellow-900/20 border-yellow-400/50 mb-4">
+                      <AlertDescription className="text-yellow-400 text-sm">
+                        ⚠️ The WebUI might take a few more minutes to fully initialize even after the URL is available.
+                        If you see a loading screen, please be patient.
+                      </AlertDescription>
+                    </Alert>
+                    <Button
+                      className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 
+                                 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-all duration-300
+                                 hover:shadow-[6px_6px_0px_0px_rgba(34,197,94,1)]
+                                 active:translate-x-1 active:translate-y-1 active:shadow-none"
+                      onClick={() => {
+                        const url = getWebuiUrl();
+                        if (url) window.open(url, '_blank');
+                      }}
+                    >
                       <span className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Deploying Punk Model...
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-2">
+                        🚀
                         <span className="relative">
-                          🎨
+                          Open WebUI
                           <span className="absolute -top-1 -right-1 animate-ping">✨</span>
                         </span>
-                        Generate Ultra-Realistic Portraits
                       </span>
-                    )}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+                    </Button>
+                  </div>
+                )}
 
-          {/* Video Generation Section */}
-          <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl">
-                <Video className="h-6 w-6" />
-                Generate Videos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4 text-zinc-600">Transform your text into amazing videos with Wan AI</p>
-              <Form {...videoForm}>
-                <form onSubmit={videoForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
-                  <FormField
-                    control={videoForm.control}
-                    name="yamlConfig"
-                    render={({ field }) => (
-                      <FormItem className="hidden">
-                        <FormControl>
-                          <Input type="hidden" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <Button
-                    type="submit"
-                    disabled={deployMutation.isPending}
-                    className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black 
-                             shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-300
-                             hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]
-                             active:translate-x-1 active:translate-y-1 active:shadow-none
-                             disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {deployMutation.isPending ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Deploying Wan...
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-2">
-                        <span className="relative">
-                          🎬
-                          <span className="absolute -top-1 -right-1 animate-ping">✨</span>
-                        </span>
-                        Generate Amazing Videos
-                      </span>
-                    )}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+                {/* Deployment Logs */}
+                {deploymentInfo.details.logs && (
+                  <div className="mt-4 animate-fade-in">
+                    <p className="mb-2 typing-effect">$ Deployment Logs:</p>
+                    <div className="bg-zinc-900 p-4 rounded-lg overflow-hidden">
+                      <pre className="overflow-x-auto text-sm max-h-60 overflow-y-auto">
+                        {deploymentInfo.details.logs.join('\n')}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Terminal-style Deployment Info */}
-        {deploymentInfo && (
-          <Card className="mt-8 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-black text-green-400 font-mono animate-fade-in">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl text-green-400">
-                <Terminal className="h-5 w-5" />
-                Deployment Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2 animate-typing">
-                <p className="typing-effect">$ Initializing deployment...</p>
-                <p>$ Deployment ID: {deploymentInfo.deployment.id}</p>
-                <p>$ Lease ID: {deploymentInfo.transaction.leaseId}</p>
-                <p>$ Status: {deploymentInfo.details.status}</p>
-                <p>$ Provider: {deploymentInfo.details.provider}</p>
-                <p>$ Started: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
-                <p>$ Remaining Time: {deploymentInfo.details.remainingTime}</p>
-                <p className="text-yellow-400">$ Note: Please wait up to 5 minutes for the AI models to load completely.</p>
-              </div>
+        {/* Spheron Attribution Footer */}
+        <footer className="mt-12 text-center text-zinc-600 border-t border-zinc-200 pt-6">
+          <a
+            href="https://spheron.network"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 hover:text-zinc-900 transition-colors"
+          >
+            Powered by
+            <span className="font-bold text-black hover:text-zinc-800">
+              Spheron Network
+            </span>
+            <span className="text-xs animate-ping">✨</span>
+          </a>
+        </footer>
 
-              {getWebuiUrl() && (
-                <div className="space-y-4 animate-fade-in">
-                  <p className="text-green-400 typing-effect">$ WebUI URL: {getWebuiUrl()}</p>
-                  <Alert className="bg-yellow-900/20 border-yellow-400/50 mb-4">
-                    <AlertDescription className="text-yellow-400 text-sm">
-                      ⚠️ The WebUI might take a few more minutes to fully initialize even after the URL is available.
-                      If you see a loading screen, please be patient.
-                    </AlertDescription>
-                  </Alert>
-                  <Button
-                    className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 
-                             shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-all duration-300
-                             hover:shadow-[6px_6px_0px_0px_rgba(34,197,94,1)]
-                             active:translate-x-1 active:translate-y-1 active:shadow-none"
-                    onClick={() => {
-                      const url = getWebuiUrl();
-                      if (url) window.open(url, '_blank');
-                    }}
-                  >
-                    <span className="flex items-center gap-2">
-                      🚀
-                      <span className="relative">
-                        Open WebUI
-                        <span className="absolute -top-1 -right-1 animate-ping">✨</span>
-                      </span>
-                    </span>
-                  </Button>
-                </div>
-              )}
+        <style jsx global>{`
+          @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+          }
 
-              {/* Deployment Logs */}
-              {deploymentInfo.details.logs && (
-                <div className="mt-4 animate-fade-in">
-                  <p className="mb-2 typing-effect">$ Deployment Logs:</p>
-                  <div className="bg-zinc-900 p-4 rounded-lg overflow-hidden">
-                    <pre className="overflow-x-auto text-sm max-h-60 overflow-y-auto">
-                      {deploymentInfo.details.logs.join('\n')}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+          .typing-effect {
+            overflow: hidden;
+            white-space: nowrap;
+            animation: typing 2s steps(40, end);
+          }
+
+          @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+
+          .animate-fade-in {
+            animation: fade-in 0.5s ease-out forwards;
+          }
+
+          @keyframes animate-ping {
+            0%, 75%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0; }
+          }
+
+          .animate-ping {
+            animation: animate-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+          }
+        `}</style>
       </div>
-
-      {/* Spheron Attribution Footer */}
-      <footer className="mt-12 text-center text-zinc-600 border-t border-zinc-200 pt-6">
-        <a
-          href="https://spheron.network"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 hover:text-zinc-900 transition-colors"
-        >
-          Powered by
-          <span className="font-bold text-black hover:text-zinc-800">
-            Spheron Network
-          </span>
-          <span className="text-xs animate-ping">✨</span>
-        </a>
-      </footer>
-
-      <style jsx global>{`
-        @keyframes typing {
-          from { width: 0 }
-          to { width: 100% }
-        }
-
-        .typing-effect {
-          overflow: hidden;
-          white-space: nowrap;
-          animation: typing 2s steps(40, end);
-        }
-
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.5s ease-out forwards;
-        }
-
-        @keyframes animate-ping {
-          0%, 75%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.2); opacity: 0; }
-        }
-
-        .animate-ping {
-          animation: animate-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
-        }
-      `}</style>
     </div>
   );
 }
