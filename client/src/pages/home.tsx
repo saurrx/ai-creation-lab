@@ -477,6 +477,22 @@ export default function Home() {
         )}
       </div>
 
+      {/* Spheron Attribution Footer */}
+      <footer className="mt-12 text-center text-zinc-600 border-t border-zinc-200 pt-6">
+        <a
+          href="https://spheron.network"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 hover:text-zinc-900 transition-colors"
+        >
+          Powered by
+          <span className="font-bold text-black hover:text-zinc-800">
+            Spheron Network
+          </span>
+          <span className="text-xs animate-ping">✨</span>
+        </a>
+      </footer>
+
       <style jsx global>{`
         @keyframes typing {
           from { width: 0 }
