@@ -10,10 +10,10 @@ import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ImageIcon, Video, Terminal, Loader2 } from "lucide-react";
+import { ImageIcon, Video, Terminal, Loader2, Sparkles } from "lucide-react";
 
-// Load YAML configurations from uploaded files
-const WEBUI_YAML = `version: "1.0"
+// Load the Punk Model YAML config
+const PUNK_YAML = `version: "1.0"
 
 services:
   sd-webui:
@@ -35,20 +35,20 @@ services:
       - "bash"
       - "-c"
       - |
-        # Start Jupyter in background with a log file
         jupyter notebook --allow-root --ip=0.0.0.0 --NotebookApp.token=test --no-browser > /tmp/jupyter.log 2>&1 &
 
-        # Make sure we have necessary dependencies
         apt-get update && apt-get install -y git wget libgl1 libglib2.0-0 || true
 
-        # Clone Stable Diffusion WebUI
         cd /home/jovyan
         if [ ! -d "stable-diffusion-webui" ]; then
           git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git
         fi
         cd stable-diffusion-webui
 
-        # Create a webui-user.sh file with appropriate settings
+        mkdir -p models/Stable-diffusion
+
+        wget --content-disposition -O models/Stable-diffusion/ultra_realistic_mix_portrait_v1.0.safetensors "https://civitai.com/api/download/models/1478064?token=54e1e8f3a5297c54c4d6a7fe87b200c7"
+
         cat > webui-user.sh << 'EOF'
         #!/bin/bash
         export COMMANDLINE_ARGS="--listen --port 7860 --enable-insecure-extension-access"
@@ -56,17 +56,13 @@ services:
         EOF
         chmod +x webui-user.sh
 
-        # Launch Stable Diffusion WebUI with logs
         echo "Starting Stable Diffusion WebUI..."
         ./webui.sh > /tmp/webui.log 2>&1 &
 
-        # Give WebUI some time to start
         sleep 10
 
-        # Keep the container running and show logs
-        echo "Services started. Container will remain running. View logs with 'tail -f /tmp/webui.log' command."
+        echo "Services started. Container will remain running."
 
-        # Keep container running
         while true; do
           sleep 60
           echo "Container is running. Stable Diffusion WebUI should be accessible on port 7860."
@@ -238,12 +234,11 @@ export default function Home() {
   const { toast } = useToast();
   const [deploymentInfo, setDeploymentInfo] = useState<DeploymentResponse | null>(null);
 
-  // Forms for both image and video generation
   const imageForm = useForm<InsertDeployment>({
     resolver: zodResolver(insertDeploymentSchema),
     defaultValues: {
-      name: "stable-diffusion-webui",
-      yamlConfig: WEBUI_YAML,
+      name: "punk-diffusion",
+      yamlConfig: PUNK_YAML,
     },
   });
 
@@ -299,140 +294,209 @@ export default function Home() {
 
   return (
     <div className="container mx-auto py-10 px-4 bg-zinc-100 min-h-screen">
-      <h1 className="text-6xl font-black mb-4 text-zinc-900 tracking-tight">AI Creation Lab</h1>
-      <p className="text-xl mb-8 text-zinc-600">Transform your ideas into stunning visuals with the power of AI</p>
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-6xl font-black mb-4 text-zinc-900 tracking-tight relative group">
+          <span className="inline-block transform transition-transform group-hover:scale-105">AI Creation Lab</span>
+          <Sparkles className="h-8 w-8 text-yellow-400 absolute -right-12 top-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </h1>
+        <p className="text-xl mb-12 text-zinc-600 animate-fade-in">
+          Transform your ideas into stunning visuals with the power of AI
+        </p>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Image Generation Section */}
-        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-2xl">
-              <ImageIcon className="h-6 w-6" />
-              Generate Images
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4 text-zinc-600">Create stunning images from text descriptions using Stable Diffusion</p>
-            <Form {...imageForm}>
-              <form onSubmit={imageForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
-                <FormField
-                  control={imageForm.control}
-                  name="yamlConfig"
-                  render={({ field }) => (
-                    <FormItem className="hidden">
-                      <FormControl>
-                        <Input type="hidden" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <Button
-                  type="submit"
-                  disabled={deployMutation.isPending}
-                  className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
-                >
-                  {deployMutation.isPending ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Deploying Stable Diffusion...
-                    </span>
-                  ) : (
-                    "🎨 Generate Images with Stable Diffusion"
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Image Generation Section */}
+          <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <ImageIcon className="h-6 w-6" />
+                Generate Images
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-zinc-600">Create ultra-realistic portraits using our fine-tuned Stable Diffusion model</p>
+              <Form {...imageForm}>
+                <form onSubmit={imageForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
+                  <FormField
+                    control={imageForm.control}
+                    name="yamlConfig"
+                    render={({ field }) => (
+                      <FormItem className="hidden">
+                        <FormControl>
+                          <Input type="hidden" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={deployMutation.isPending}
+                    className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black 
+                             shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 
+                             hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]
+                             active:translate-x-1 active:translate-y-1 active:shadow-none
+                             disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deployMutation.isPending ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deploying Punk Model...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <span className="relative">
+                          🎨
+                          <span className="absolute -top-1 -right-1 animate-ping">✨</span>
+                        </span>
+                        Generate Ultra-Realistic Portraits
+                      </span>
+                    )}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
 
-        {/* Video Generation Section */}
-        <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-2xl">
-              <Video className="h-6 w-6" />
-              Generate Videos
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4 text-zinc-600">Transform your text into amazing videos with Wan AI</p>
-            <Form {...videoForm}>
-              <form onSubmit={videoForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
-                <FormField
-                  control={videoForm.control}
-                  name="yamlConfig"
-                  render={({ field }) => (
-                    <FormItem className="hidden">
-                      <FormControl>
-                        <Input type="hidden" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <Button
-                  type="submit"
-                  disabled={deployMutation.isPending}
-                  className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
-                >
-                  {deployMutation.isPending ? (
+          {/* Video Generation Section */}
+          <Card className="border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 transform hover:-translate-y-1">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Video className="h-6 w-6" />
+                Generate Videos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-zinc-600">Transform your text into amazing videos with Wan AI</p>
+              <Form {...videoForm}>
+                <form onSubmit={videoForm.handleSubmit((data) => deployMutation.mutate(data))} className="space-y-6">
+                  <FormField
+                    control={videoForm.control}
+                    name="yamlConfig"
+                    render={({ field }) => (
+                      <FormItem className="hidden">
+                        <FormControl>
+                          <Input type="hidden" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={deployMutation.isPending}
+                    className="w-full bg-black hover:bg-zinc-800 text-white border-2 border-black 
+                             shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-300
+                             hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]
+                             active:translate-x-1 active:translate-y-1 active:shadow-none
+                             disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deployMutation.isPending ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deploying Wan...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <span className="relative">
+                          🎬
+                          <span className="absolute -top-1 -right-1 animate-ping">✨</span>
+                        </span>
+                        Generate Amazing Videos
+                      </span>
+                    )}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Terminal-style Deployment Info */}
+        {deploymentInfo && (
+          <Card className="mt-8 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-black text-green-400 font-mono animate-fade-in">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl text-green-400">
+                <Terminal className="h-5 w-5" />
+                Deployment Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2 animate-typing">
+                <p className="typing-effect">$ Initializing deployment...</p>
+                <p>$ Deployment ID: {deploymentInfo.deployment.id}</p>
+                <p>$ Status: {deploymentInfo.details.status}</p>
+                <p>$ Provider: {deploymentInfo.details.provider}</p>
+                <p>$ Started: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
+                <p>$ Remaining Time: {deploymentInfo.details.remainingTime}</p>
+              </div>
+
+              {getWebuiUrl() && (
+                <div className="space-y-4 animate-fade-in">
+                  <p className="text-green-400 typing-effect">$ WebUI URL: {getWebuiUrl()}</p>
+                  <Button
+                    className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 
+                             shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-all duration-300
+                             hover:shadow-[6px_6px_0px_0px_rgba(34,197,94,1)]
+                             active:translate-x-1 active:translate-y-1 active:shadow-none"
+                    onClick={() => {
+                      const url = getWebuiUrl();
+                      if (url) window.open(url, '_blank');
+                    }}
+                  >
                     <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Deploying Wan...
+                      🚀
+                      <span className="relative">
+                        Open WebUI
+                        <span className="absolute -top-1 -right-1 animate-ping">✨</span>
+                      </span>
                     </span>
-                  ) : (
-                    "🎬 Generate Videos with Wan"
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+                  </Button>
+                </div>
+              )}
+
+              {/* Deployment Logs */}
+              {deploymentInfo.details.logs && (
+                <div className="mt-4 animate-fade-in">
+                  <p className="mb-2 typing-effect">$ Deployment Logs:</p>
+                  <pre className="bg-zinc-900 p-4 rounded-lg overflow-x-auto text-sm">
+                    {deploymentInfo.details.logs.join('\n')}
+                  </pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Terminal-style Deployment Info */}
-      {deploymentInfo && (
-        <Card className="mt-8 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-black text-green-400 font-mono">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl text-green-400">
-              <Terminal className="h-5 w-5" />
-              Deployment Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <p>$ Deployment ID: {deploymentInfo.deployment.id}</p>
-              <p>$ Status: {deploymentInfo.details.status}</p>
-              <p>$ Provider: {deploymentInfo.details.provider}</p>
-              <p>$ Started: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
-              <p>$ Remaining Time: {deploymentInfo.details.remainingTime}</p>
-            </div>
+      <style jsx global>{`
+        @keyframes typing {
+          from { width: 0 }
+          to { width: 100% }
+        }
 
-            {getWebuiUrl() && (
-              <div className="space-y-4">
-                <p className="text-green-400">$ WebUI URL: {getWebuiUrl()}</p>
-                <Button
-                  className="w-full bg-green-600 hover:bg-green-700 text-black border-2 border-green-400 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
-                  onClick={() => {
-                    const url = getWebuiUrl();
-                    if (url) window.open(url, '_blank');
-                  }}
-                >
-                  🚀 Open WebUI
-                </Button>
-              </div>
-            )}
+        .typing-effect {
+          overflow: hidden;
+          white-space: nowrap;
+          animation: typing 2s steps(40, end);
+        }
 
-            {/* Deployment Logs */}
-            {deploymentInfo.details.logs && (
-              <div className="mt-4">
-                <p className="mb-2">$ Deployment Logs:</p>
-                <pre className="bg-zinc-900 p-4 rounded-lg overflow-x-auto text-sm">
-                  {deploymentInfo.details.logs.join('\n')}
-                </pre>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.5s ease-out forwards;
+        }
+
+        @keyframes animate-ping {
+          0%, 75%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0; }
+        }
+
+        .animate-ping {
+          animation: animate-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+
+      `}</style>
     </div>
   );
 }
