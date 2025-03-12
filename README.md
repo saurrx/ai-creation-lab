@@ -3,8 +3,6 @@
 
 A full-stack web application for deploying AI models using the Spheron Protocol, built with React, Express, and TypeScript.
 
-![AI Creation Lab](attached_assets/image_1741399527251.png)
-
 ## Overview
 
 AI Creation Lab is a platform that allows users to deploy AI models for image generation using Spheron Protocol's decentralized infrastructure. The application includes a modern, responsive UI built with React and a robust backend powered by Express.
